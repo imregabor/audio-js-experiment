@@ -31,9 +31,11 @@
 
 
         function scrollingCanvas(parent, w, h) {
-        
-        
-            var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(parent))[0];
+            var component = $('<div>');
+            var title = $('<h4>', { text : 'Scrolling canvas' }).appendTo(component);
+            var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(component))[0];
+            component.appendTo(parent);
+            
             canvas.width=w;
             canvas.height=h;
             var ctx = canvas.getContext("2d");
@@ -59,18 +61,36 @@
  
                     // reset the transformation matrix
                     ctx.setTransform(1, 0, 0, 1, 0, 0);                
+                    
+                    return ret;
                 },
                 cline : function() {
                     ctx.fillStyle = '#000000';
                     ctx.fillRect(w - 1, 0, 1, h);                
+                    
+                    return ret;
                 },
                 bar : function(p) {
                     ret.step();
                     ret.cline();
                     if (p >= 0.0 && p <= 1.0) {
-                        ctx.fillStyle = '#00ff00';
+                        ctx.fillStyle = '#008800';
                         ctx.fillRect(w - 1, h * (1 - p), 1, h * p);                
                     }
+                    
+                    return ret;
+                },
+                barAndDot : function(p, d) {
+                    ret.bar(p);
+                    if (d >= 0.0 && d <= 1.0) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(w - 1, h * (1 - d), 1, 1);                
+                    }
+                    return ret;
+                },
+                title : function(t) {
+                    title.text(t);
+                    return ret;
                 }
             };
             return ret;
@@ -143,24 +163,22 @@
                 grad.push('#' + h + h + h);
             }
             
-            var l = 0;
             
             console.log(audioContext.sampleRate);
 
-            var c = scrollingCanvas(window.document.body, 800, 512);
+            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum');
             
-            var pov = scrollingCanvas(window.document.body, 800, 80);
+            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x4)');
             
-            var ma = 0.1;
+            var ma = 0.1; // Total energy max
+            var maLastSet = 0; // Last timestamp when total energy max set
             
             function update() {
                 requestAnimationFrame(update);
                 
                 meter.tick();
                 
-                var l2 = Date.now();
-                // console.log(l2 - l);
-                l = l2;
+                var ctims = Date.now();
                 
                 analyser.getByteFrequencyData(frequencyData);
                 
@@ -170,10 +188,15 @@
                     d += s * s;
                 }
                 d /= frequencyData.length;
-                ma *= 0.995;
-                if ( d > ma ) { ma = d; }
                 
-                pov.bar(d/ma);
+                if (ctims - maLastSet > 3000) {
+                    // wait 3 s before scaling down max
+                    ma *= 0.997;
+                }
+                
+                if ( d > ma ) { ma = d; maLastSet = ctims; }
+                
+                pov.barAndDot(d/ma, 4 * ma);
                 
                 
                 var ctx = c.getContext2d();
