@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Drop a file here</title>
+    <style>
+        canvas {
+            margin-bottom: 10px;
+        }
+    </style>
+  </head>
+  <body>
+      
+      <script src='lib/jquery-3.1.0/jquery-3.1.0.min.js'></script>
+      <script src='lib/fpsmeter-0.3.1/fpsmeter.js'></script>
+      <script src='lib/audiodrop/AudioDrop.js'></script>
+      <script src='lib/buffaudio/buffaudio.js'></script>
+      <script type='text/javascript'>
+        'use strict';
+        
+        function getAudioContext() {
+            // From http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
+            if (typeof AudioContext !== "undefined") {
+                return new AudioContext();
+            } else if (typeof webkitAudioContext !== "undefined") {
+                return new webkitAudioContext();
+            } else {
+                throw new Error('No AudioContext available');
+            }
+        }
+
+
+        function scrollingCanvas(parent, w, h) {
+        
+        
+            var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(parent))[0];
+            canvas.width=w;
+            canvas.height=h;
+            var ctx = canvas.getContext("2d");
+
+            var tempCanvas = document.createElement("canvas");
+            tempCanvas.width=w
+            tempCanvas.height=h
+
+            var tempCtx = tempCanvas.getContext("2d");
+            
+            var ret = {
+                w : w,
+                h : h,
+                getContext2d : function() {
+                    return ctx;
+                },
+                step : function() {
+                    tempCtx.drawImage(canvas, 0, 0, w, h);
+                    // set translate on the canvas
+                    ctx.translate(-1, 0);
+                    // draw the copied image
+                    ctx.drawImage(tempCanvas, 0, 0, w, h, 0, 0, w, h);
+ 
+                    // reset the transformation matrix
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);                
+                },
+                cline : function() {
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(w - 1, 0, 1, h);                
+                },
+                bar : function(p) {
+                    ret.step();
+                    ret.cline();
+                    if (p >= 0.0 && p <= 1.0) {
+                        ctx.fillStyle = '#00ff00';
+                        ctx.fillRect(w - 1, h * (1 - p), 1, h * p);                
+                    }
+                }
+            };
+            return ret;
+
+        }
+        
+        
+        $(function() {
+            
+        
+            var meter = new FPSMeter(document.body, { left: 'auto', right : '5px' });
+            
+        
+            // See http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
+            // and http://ianreah.com/js/Real-time-frequency-analysis-of-streaming-audio-data/main.js
+            //
+            // Also http://www.smartjava.org/content/exploring-html5-web-audio-visualizing-sound
+            // and http://www.smartjava.org/examples/webaudio/example4.html
+
+            // http://caniuse.com/#feat=audio-api
+            // http://caniuse.com/#feat=requestanimationframe
+            
+            
+            var audioContext = getAudioContext();
+            var analyser = audioContext.createAnalyser();
+            
+            analyser.smoothingTimeConstant = 0;
+            analyser.fftSize = 8192;
+            analyser.connect(audioContext.destination);
+            
+            
+            var buffaudio;
+            
+            AudioDrop({
+                context : audioContext,
+                elements : window.document.body,
+                drop : function(buffer, file) {
+                    console.log('New file dropped');
+                    console.log('Buffer:', buffer, 'file:', file)
+                    if (buffaudio) {
+                        console.log('buffaudio already inited');
+                        buffaudio.stop();
+                        buffaudio.initNewBuffer(buffer);
+                        
+
+                        
+                    } else {
+                        console.log('Init buffaudio');
+                        buffaudio = new BuffAudio(audioContext, buffer, analyser);
+
+                        // Kick it off...
+                        update();            
+                    }
+                    buffaudio.play();
+                }
+            });
+            
+            
+            
+            var frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            
+            
+            
+            var grad = [];
+            for (var i = 0; i < 256; i++) {
+                var h = Number(i).toString(16);
+                while (h.length < 2) {
+                    h = '0' + h;
+                }
+                grad.push('#' + h + h + h);
+            }
+            
+            var l = 0;
+            
+            console.log(audioContext.sampleRate);
+
+            var c = scrollingCanvas(window.document.body, 800, 512);
+            
+            var pov = scrollingCanvas(window.document.body, 800, 80);
+            
+            var ma = 0.1;
+            
+            function update() {
+                requestAnimationFrame(update);
+                
+                meter.tick();
+                
+                var l2 = Date.now();
+                // console.log(l2 - l);
+                l = l2;
+                
+                analyser.getByteFrequencyData(frequencyData);
+                
+                var d = 0;
+                for (var i = 0; i < frequencyData.length; i++) {
+                    var s = frequencyData[i] / 255;
+                    d += s * s;
+                }
+                d /= frequencyData.length;
+                ma *= 0.995;
+                if ( d > ma ) { ma = d; }
+                
+                pov.bar(d/ma);
+                
+                
+                var ctx = c.getContext2d();
+                // iterate over the elements from the array
+                for (var i = 0; i < frequencyData.length && i < c.h; i++) {
+                    // draw each pixel with the specific color
+                    var value = frequencyData[i];
+                    ctx.fillStyle = grad[value];
+ 
+                    // draw the line at the right side of the canvas
+                    ctx.fillRect(c.w - 1, c.h - i, 1, 1);
+                }
+ 
+                c.step();
+ 
+            }
+            
+            
+          
+        });
+        
+      </script>
+      
+  </body>
+</html>

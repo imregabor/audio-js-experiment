@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>A player</title>
+  </head>
+  <body>
+      <script src='lib/jquery-3.1.0/jquery-3.1.0.min.js'></script>
+      <script src='lib/fpsmeter-0.3.1/fpsmeter.js'></script>
+      <script type='text/javascript'>
+        'use strict';
+        
+        $(function() {
+            var meter = new FPSMeter(document.body, { left: 'auto', right : '5px' });
+        
+        
+            // See http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
+            // and http://ianreah.com/js/Real-time-frequency-analysis-of-streaming-audio-data/main.js
+            //
+            // Also http://www.smartjava.org/content/exploring-html5-web-audio-visualizing-sound
+            // and http://www.smartjava.org/examples/webaudio/example4.html
+            
+            // Future-proofing...
+            var audioContext;
+            if (typeof AudioContext !== "undefined") {
+                audioContext = new AudioContext();
+            } else if (typeof webkitAudioContext !== "undefined") {
+                audioContext = new webkitAudioContext();
+            } else {
+                $(".hideIfNoApi").hide();
+                $(".showIfNoApi").show();
+                return;
+            }
+
+            // Overkill - if we've got Web Audio API, surely we've got requestAnimationFrame. Surely?...
+            // requestAnimationFrame polyfill by Erik M�ller
+            // fixes from Paul Irish and Tino Zijdel
+            // http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+            // http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
+            var lastTime = 0;
+            var vendors = ['ms', 'moz', 'webkit', 'o'];
+            for (var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+                window.requestAnimationFrame = window[vendors[x] + 'RequestAnimationFrame'];
+                window.cancelAnimationFrame = window[vendors[x] + 'CancelAnimationFrame']
+                                            || window[vendors[x] + 'CancelRequestAnimationFrame'];
+            }
+
+            if (!window.requestAnimationFrame) {
+                window.requestAnimataionFrame = function (callback, element) {
+                    var currTime = new Date().getTime();
+                    var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+                    var id = window.setTimeout(function () { callback(currTime + timeToCall); },
+                        timeToCall);
+                    lastTime = currTime + timeToCall;
+                    return id;
+                };
+            }
+
+            if (!window.cancelAnimationFrame) {
+                window.cancelAnimationFrame = function (id) {
+                    clearTimeout(id);
+                };
+            }
+            
+            // End of polyfills...
+            // Btw
+            // http://caniuse.com/#feat=audio-api
+            // http://caniuse.com/#feat=requestanimationframe
+            
+            var analyser = audioContext.createAnalyser();
+            
+            analyser.smoothingTimeConstant = 0;
+            analyser.fftSize = 8192;
+            var frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            
+            // create a temp canvas we use for copying and scrolling
+            var tempCanvas = document.createElement("canvas");
+            var tempCtx = tempCanvas.getContext("2d");
+            tempCanvas.width=800;
+            tempCanvas.height=512;
+            
+            
+            var grad = [];
+            for (var i = 0; i < 256; i++) {
+                var h = Number(i).toString(16);
+                while (h.length < 2) {
+                    h = '0' + h;
+                }
+                grad.push('#' + h + h + h);
+            }
+            
+            var l = 0;
+            
+            console.log(audioContext.sampleRate);
+            
+            function update() {
+                requestAnimationFrame(update);
+                
+                meter.tick();
+                
+                var l2 = Date.now();
+                // console.log(l2 - l);
+                l = l2;
+                
+                analyser.getByteFrequencyData(frequencyData);
+                
+                // copy the current canvas onto the temp canvas
+                var canvas = document.getElementById("canvas");
+ 
+                tempCtx.drawImage(canvas, 0, 0, 800, 512);
+
+                var ctx = canvas.getContext("2d");
+                
+                // iterate over the elements from the array
+                for (var i = 0; i < frequencyData.length && i < 512; i++) {
+                    // draw each pixel with the specific color
+                    var value = frequencyData[i];
+                    ctx.fillStyle = grad[value];
+ 
+                    // draw the line at the right side of the canvas
+                    ctx.fillRect(800 - 1, 512 - i, 1, 1);
+                }
+ 
+                // set translate on the canvas
+                ctx.translate(-1, 0);
+                // draw the copied image
+                ctx.drawImage(tempCanvas, 0, 0, 800, 512, 0, 0, 800, 512);
+ 
+                // reset the transformation matrix
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+            }
+            
+            // Hook up the audio routing...
+            // player -> analyser -> speakers
+            // (Do this after the player is ready to play - https://code.google.com/p/chromium/issues/detail?id=112368#c4)
+            $("#player").bind('canplay', function() {
+                console.log(audioContext.sampleRate);
+                var source = audioContext.createMediaElementSource(this);
+
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+            });
+
+            // Kick it off...
+            update();            
+            
+          
+        });
+        
+      </script>
+      
+      <audio id="player" class="playerclass" controls="controls" src="https://ia800807.us.archive.org/4/items/7thSymphony2ndMovement/LudwigVanBeethoven-7thSymphony2ndMovement-Dareeandlegal5.mp3" crossorigin="anonymous"> </audio>
+      <canvas id="canvas" width="800" height="512" style="display: block; background-color: black ;"></canvas>
+  </body>
+</html>
