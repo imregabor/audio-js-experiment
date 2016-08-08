@@ -164,11 +164,12 @@
             }
             
             
+            
             console.log(audioContext.sampleRate);
 
             var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum');
             
-            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x4)');
+            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)');
             
             var ma = 0.1; // Total energy max
             var maLastSet = 0; // Last timestamp when total energy max set
@@ -196,8 +197,17 @@
                 
                 if ( d > ma ) { ma = d; maLastSet = ctims; }
                 
-                pov.barAndDot(d/ma, 4 * ma);
+                pov.barAndDot(d/ma, 3 * ma);
                 
+                var bs = $('.bulb');
+                var pp = Math.floor(bs.length * 255 * d/ma);
+                for (var i = 0; i < bs.length; i++) {
+                    var v = pp > 255 ? 255 : pp;
+                    pp -= v;
+                    $(bs[i]).css('background-color', grad[ v ]);
+                }
+                // $('#l1').css('background-color', grad[ Math.floor(d/ma) ]);
+                // $('#l1').css('background-color', grad[ Math.floor(255 * d/ma) ]);
                 
                 var ctx = c.getContext2d();
                 // iterate over the elements from the array
@@ -219,6 +229,36 @@
         });
         
       </script>
-      
+  
+    <div style='background-color: black; padding: 10px; display: flex;'>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+    </div>
+  
   </body>
+  
 </html>
