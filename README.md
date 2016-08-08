@@ -7,8 +7,8 @@ Getting started
 ---------------
 
    - Open <a.html> for playback + spectrum using `<audio>`. 
-   
    - Open <b.html> and drop an `mp3` file to the browser.
+   - Use [RawGit](http://rawgit.com) to access `b.html`: <https://rawgit.com/imregabor/audio-js-experiment/master/b.html>
 
     
 Sources
