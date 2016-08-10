@@ -124,6 +124,10 @@
                 byteFreqData : function(frequencyData, clip) {
                     ret.step();
                     if (clip || frequencyData.length <= h) {
+                        if (h > frequencyData.length) {
+                            ctx.fillStyle = '#000000';
+                            ctx.fillRect(w - 1, 0, 1, h - frequencyData.length + 1);                
+                        }
                         // iterate over the elements from the array
                         for (var i = 0; i < frequencyData.length && i < h; i++) {
                             // draw each pixel with the specific color
@@ -191,7 +195,14 @@
             var analyser = audioContext.createAnalyser();
             
             analyser.smoothingTimeConstant = 0;
-            analyser.fftSize = 4096;
+            
+            var frequencyData;
+            var setFftSize = function(fftSize) {
+                analyser.fftSize = fftSize;
+                frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            }
+            setFftSize(4096)
+            
             analyser.connect(audioContext.destination);
             
             
@@ -223,26 +234,29 @@
             
             
             
-            var frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            
             
             
             
             console.log(audioContext.sampleRate);
 
             var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum');
-            
             var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)');
             
-            var ma = 0.1; // Total energy max
+            var ma = 0.0; // Total energy max
             var maLastSet = 0; // Last timestamp when total energy max set
             
             
             var p = {
+                fftsize : 4096,
                 clip_high : true,
                 vu_decay_r : 997,
                 vu_sustain_t : 3000
+                
             }
             var gui = new dat.GUI();
+            
+            gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(setFftSize);
             
             var spf = gui.addFolder('Spectrum display');
             spf.add(p, 'clip_high');
@@ -278,7 +292,7 @@
                 
                 if ( d > ma ) { ma = d; maLastSet = ctims; }
                 
-                pov.barAndDot(d/ma, 3 * ma);
+                pov.barAndDot(ma <= 0 ? 0 : d/ma, 3 * ma);
                 
                 var bs = $('.bulb');
                 var pp = Math.floor(bs.length * 255 * d/ma);
