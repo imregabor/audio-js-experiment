@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Drop a file here</title>
+    <style>
+        canvas {
+            margin-bottom: 10px;
+        }
+    </style>
+  </head>
+  <body>
+      
+      <script src='lib/jquery-3.1.0/jquery-3.1.0.min.js'></script>
+      <script src='lib/fpsmeter-0.3.1/fpsmeter.js'></script>
+      <script src='lib/audiodrop/AudioDrop.js'></script>
+      <script src='lib/buffaudio/buffaudio.js'></script>
+      <script src='lib/dat.gui-0.5.1/dat.gui.min.js'></script>
+      <script type='text/javascript'>
+        'use strict';
+        
+        function getAudioContext() {
+            // From http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
+            if (typeof AudioContext !== "undefined") {
+                return new AudioContext();
+            } else if (typeof webkitAudioContext !== "undefined") {
+                return new webkitAudioContext();
+            } else {
+                throw new Error('No AudioContext available');
+            }
+        }
+        var grad = [];
+        for (var i = 0; i < 256; i++) {
+            var h = Number(i).toString(16);
+            while (h.length < 2) {
+                h = '0' + h;
+            }
+            grad.push('#' + h + h + h);
+        }
+
+
+        function scrollingCanvas(parent, w, h) {
+            var component = $('<div>');
+            var title = $('<h4>', { text : 'Scrolling canvas' }).appendTo(component);
+            var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(component))[0];
+            component.appendTo(parent);
+            
+            canvas.width=w;
+            canvas.height=h;
+            var ctx = canvas.getContext("2d");
+
+            var tempCanvas = document.createElement("canvas");
+            tempCanvas.width=w
+            tempCanvas.height=h
+
+            var tempCtx = tempCanvas.getContext("2d");
+            
+            var ret = {
+                w : w,
+                h : h,
+                getContext2d : function() {
+                    return ctx;
+                },
+                /**
+                 * Step the canvas 1 px left but dont clear right row.
+                 */
+                step : function() {
+                    tempCtx.drawImage(canvas, 0, 0, w, h);
+                    // set translate on the canvas
+                    ctx.translate(-1, 0);
+                    // draw the copied image
+                    ctx.drawImage(tempCanvas, 0, 0, w, h, 0, 0, w, h);
+ 
+                    // reset the transformation matrix
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);                
+                    
+                    return ret;
+                },
+                /**
+                 * Clear rightmost pixel column.
+                 */
+                cline : function() {
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(w - 1, 0, 1, h);                
+                    
+                    return ret;
+                },
+                /**
+                 * Draw a bar value in the rightmost pixel column.
+                 *
+                 * @param p Value normalized to 0..1 range
+                 */
+                bar : function(p) {
+                    ret.step();
+                    ret.cline();
+                    if (p >= 0.0 && p <= 1.0) {
+                        ctx.fillStyle = '#008800';
+                        ctx.fillRect(w - 1, h * (1 - p), 1, h * p);                
+                    }
+                    
+                    return ret;
+                },
+                /**
+                 * Draw a bar value and a dot value in the righmost pixel column.
+                 *
+                 * @param p Bar value normalized to 0..1 range
+                 * @param d Dot value normalized to 0..1 range
+                 */
+                barAndDot : function(p, d) {
+                    ret.bar(p);
+                    if (d >= 0.0 && d <= 1.0) {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(w - 1, h * (1 - d), 1, 1);                
+                    }
+                    return ret;
+                },
+                
+                
+                simpleSpectrum : function(frequencyData) {
+                    var s = Math.min(frequencyData.length, w);
+                    for (var i = 0; i < s; i++) {
+                        var y = h - Math.round(h *frequencyData[i] / 255);
+                        ctx.fillStyle = '#000000';
+                        ctx.fillRect(i, 0, 1, y -1);                
+                        ctx.fillStyle = '#008800';
+                        ctx.fillRect(i, y, 1, h - y);                
+                    }
+                },
+                
+                /**
+                 * Draw byte frequency data (spectrum) in the rightmost pixel column.
+                 *
+                 * @param frequencyData Uint8Array spectrum
+                 * @param clip Clip highest bands or scale spectrum to fit in
+                 */
+                byteFreqData : function(frequencyData, clip) {
+                    ret.step();
+                    if (clip || frequencyData.length <= h) {
+                        if (h > frequencyData.length) {
+                            ctx.fillStyle = '#000000';
+                            ctx.fillRect(w - 1, 0, 1, h - frequencyData.length + 1);                
+                        }
+                        // iterate over the elements from the array
+                        for (var i = 0; i < frequencyData.length && i < h; i++) {
+                            // draw each pixel with the specific color
+                            var value = frequencyData[i];
+                            ctx.fillStyle = grad[value];
+     
+                            // draw the line at the right side of the canvas
+                            ctx.fillRect(w - 1, h - i, 1, 1);
+                        }
+                    } else {
+                        // collapse some bands
+                        var a = 1; // number of samples to collapse
+                        
+                        while (frequencyData.length > h * a) {
+                            a *= 2;
+                        }
+
+                        var i = 0;
+                        while (i < h) {
+                            var value = 0;
+                            for (var j = 0; j < a; j++) {
+                                value += frequencyData[i * a + j];
+                            }
+                            value /= a;
+                            
+                            ctx.fillStyle = grad[Math.floor(value)];
+                            ctx.fillRect(w - 1, h - i, 1, 1);
+                            
+                            i++;
+                        }
+                    }
+     
+                    return ret;
+                },
+                /**
+                 * Update title.
+                 */
+                title : function(t) {
+                    title.text(t);
+                    return ret;
+                }
+            };
+            return ret;
+
+        }
+
+        
+        
+        /**
+         * Allocate bands to group.
+         *
+         * @param samplerate Audio sample rate
+         * @param fftsize FFT size parameter, freq data is expected to be half
+         * @param max frequency to represent
+         * @param count number of final groups
+         * @param a Frequency span ratio of last/first band
+         */
+        function alloc(samplerate, fftsize, maxfreq, count, a) {
+            
+            console.log('Samplerate ', samplerate, 'fftsize', fftsize, 'maxfreq', maxfreq, 'a', a);
+            
+            var exp = Math.pow(a, 1 / (count - 1));
+            
+            
+            var targetbinct = Math.round(fftsize * maxfreq / samplerate);
+            console.log('Target bin count:', targetbinct, 'exp', exp);
+            
+            var sizes = [];
+            var totalct =0;
+            var b = targetbinct / (1 - Math.pow(exp, count)) * (1 - exp);
+            console.log('b', b);
+            
+            for (var i = 0; i < count; i++) {
+                var gi = Math.round(b * Math.pow(exp, i));
+                sizes.push(gi);
+                totalct += gi;
+            }
+            
+            console.log('After first allocation:', sizes);
+            
+            while (totalct < targetbinct) {
+                for (var i = sizes.length - 1; i >= 0 && totalct < targetbinct; i--) {
+                    totalct ++;
+                    sizes[i] ++;
+                }
+            }
+            
+            console.log('After adjustments', sizes);
+            return sizes;
+        
+        }
+        
+        
+        $(function() {
+            
+        
+            var meter = new FPSMeter(document.body, { left: 'auto', top : 'auto', right : '5px', bottom : '5px' });
+            
+        
+            // See http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
+            // and http://ianreah.com/js/Real-time-frequency-analysis-of-streaming-audio-data/main.js
+            //
+            // Also http://www.smartjava.org/content/exploring-html5-web-audio-visualizing-sound
+            // and http://www.smartjava.org/examples/webaudio/example4.html
+
+            // http://caniuse.com/#feat=audio-api
+            // http://caniuse.com/#feat=requestanimationframe
+            
+            
+            var audioContext = getAudioContext();
+            var analyser = audioContext.createAnalyser();
+            
+            analyser.smoothingTimeConstant = 0;
+            
+            var frequencyData;
+            var setFftSize = function(fftSize) {
+                analyser.fftSize = fftSize;
+                frequencyData = new Uint8Array(analyser.frequencyBinCount);
+            }
+            setFftSize(4096)
+            
+            analyser.connect(audioContext.destination);
+            
+            
+            var buffaudio;
+            
+            AudioDrop({
+                context : audioContext,
+                elements : window.document.body,
+                drop : function(buffer, file) {
+                    console.log('New file dropped');
+                    console.log('Buffer:', buffer, 'file:', file)
+                    if (buffaudio) {
+                        console.log('buffaudio already inited');
+                        buffaudio.stop();
+                        buffaudio.initNewBuffer(buffer);
+                        
+
+                        
+                    } else {
+                        console.log('Init buffaudio');
+                        buffaudio = new BuffAudio(audioContext, buffer, analyser);
+
+                        // Kick it off...
+                        update();            
+                    }
+                    buffaudio.play();
+                }
+            });
+            
+            
+            
+            
+            
+            
+            
+            console.log(audioContext.sampleRate);
+
+            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum');
+            var sss = scrollingCanvas(window.document.body, 1024, 80).title('Spectrum');
+            var pss = scrollingCanvas(window.document.body, 1024, 80).title('Power spectrum');
+            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)');
+            
+            
+            var ma = 0.0; // Total energy max
+            var maLastSet = 0; // Last timestamp when total energy max set
+            
+            
+            var p = {
+                fftsize : 4096,
+                clip_high : true,
+                vu_decay_r : 997,
+                vu_sustain_t : 3000,
+                vu_bin_exponent : 2
+                
+            }
+            var gui = new dat.GUI();
+            
+            gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(setFftSize);
+            
+            var spf = gui.addFolder('Spectrum display');
+            spf.add(p, 'clip_high');
+            spf.open();
+            
+            var vuf = gui.addFolder('VU Meter');
+            vuf.add(p, 'vu_decay_r');
+            vuf.add(p, 'vu_sustain_t');
+            vuf.add(p, 'vu_bin_exponent', [1, 2]);
+            vuf.open();
+            
+            
+            
+            var os = alloc(audioContext.sampleRate, p.fftsize, 3500, 24, 32);
+            var osm = [];
+            for (var i = 0; i < os.length; i++) { osm.push(0); }
+            
+            function update() {
+                requestAnimationFrame(update);
+                
+                meter.tick();
+                
+                var ctims = Date.now();
+                
+                analyser.getByteFrequencyData(frequencyData);
+                
+                var d = 0;
+                for (var i = 0; i < frequencyData.length; i++) {
+                    var s = frequencyData[i] / 255;
+                    var ss = s;
+                    for (var j = 1; j < p.vu_bin_exponent; j++) {
+                        ss *= s;
+                    }
+                    d += ss;
+                }
+                d /= frequencyData.length;
+                
+                if (ctims - maLastSet > p.vu_sustain_t) {
+                    // wait 3 s before scaling down max
+                    ma *= p.vu_decay_r / 1000;
+                }
+                
+                if ( d > ma ) { ma = d; maLastSet = ctims; }
+                
+                pov.barAndDot(ma <= 0 ? 0 : d/ma, 3 * ma);
+                
+
+                var sums = [];
+                sums.push(frequencyData[0]);
+                for(var i = 1; i < frequencyData.length; i++) {
+                    var n = frequencyData[i] / 255;
+                    for (var j = 2; j < 4 && i * j < frequencyData.length; j++) {
+                        n *= frequencyData[i * j] / 255;
+                    }
+                    sums.push(n * 255);
+                }
+
+                
+                
+                var org = [];
+                var k = 0;
+                
+                for (var i = 0; i < os.length; i++) {
+                    var orgi = 0;
+                    for (var j = 0; j < os[i]; j++) {
+                        orgi += frequencyData[k] * frequencyData[k];
+                        // orgi += sums[k] * sums[k];
+                        k++;
+                    }
+                    orgi /= (255 * os[i]);
+                    org.push(orgi);
+                    osm[i] *= 0.997;
+                    if (osm[i] < orgi) {
+                       osm[i] = orgi;
+                    }
+                }
+
+
+                
+
+                
+                
+                
+                var bs = $('.bulb');
+                var pp = Math.floor(bs.length * 255 * d/ma);
+                for (var i = 0; i < bs.length; i++) {
+                    /*
+                    var v = pp > 255 ? 255 : pp;
+                    pp -= v;
+                    */
+                    
+                    var mv = 0;
+                    for (var j = -2; j <= 2; j++) {
+                        if (i + j < 0 || i + j >= bs.length) { continue; }
+                        if (osm[i+j] > mv) { mv = osm[i + j]; }
+                    }
+                    
+                    // var v = Math.floor(255 * org[i] / osm[i]);
+                    var v = Math.floor(255 * org[i] / mv);
+                    $(bs[i]).css('background-color', grad[ v ]);
+                }
+                // $('#l1').css('background-color', grad[ Math.floor(d/ma) ]);
+                // $('#l1').css('background-color', grad[ Math.floor(255 * d/ma) ]);
+                
+                c.byteFreqData(frequencyData, p.clip_high);
+                
+                 
+                sss.simpleSpectrum(frequencyData);
+                pss.simpleSpectrum(sums);
+                
+                
+                
+                
+            }
+            
+            
+          
+        });
+        
+      </script>
+  
+    <div style='display: flex;'>
+        <div style='background-color: black; padding: 10px; display: flex;'>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
+        </div>
+    </div>
+  
+  </body>
+  
+</html>
