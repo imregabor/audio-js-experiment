@@ -251,7 +251,8 @@
                 fftsize : 4096,
                 clip_high : true,
                 vu_decay_r : 997,
-                vu_sustain_t : 3000
+                vu_sustain_t : 3000,
+                vu_bin_exponent : 2
                 
             }
             var gui = new dat.GUI();
@@ -265,6 +266,7 @@
             var vuf = gui.addFolder('VU Meter');
             vuf.add(p, 'vu_decay_r');
             vuf.add(p, 'vu_sustain_t');
+            vuf.add(p, 'vu_bin_exponent', [1, 2]);
             vuf.open();
             
             
@@ -281,7 +283,11 @@
                 var d = 0;
                 for (var i = 0; i < frequencyData.length; i++) {
                     var s = frequencyData[i] / 255;
-                    d += s * s;
+                    var ss = s;
+                    for (var j = 1; j < p.vu_bin_exponent; j++) {
+                        ss *= s;
+                    }
+                    d += ss;
                 }
                 d /= frequencyData.length;
                 
