@@ -5,7 +5,14 @@
     <title>Drop a file here</title>
     <style>
         canvas {
-            margin-bottom: 10px;
+            margin-left : 10px;  /* Fit to scale */
+            /* margin-bottom: 10px; */
+        }
+        svg {
+            shape-rendering : crispEdges ; /* see http://stackoverflow.com/questions/15723314/xcharts-rendering-of-text-is-blurry */
+        }
+        .noaxispath path.domain {
+            display : none; /* see https://bl.ocks.org/mbostock/1166403 */
         }
     </style>
   </head>
@@ -16,6 +23,7 @@
       <script src='lib/audiodrop/AudioDrop.js'></script>
       <script src='lib/buffaudio/buffaudio.js'></script>
       <script src='lib/dat.gui-0.5.1/dat.gui.min.js'></script>
+      <script src='lib/d3-4.2.1/d3.min.js'></script>
       <script type='text/javascript'>
         'use strict';
         
@@ -38,15 +46,30 @@
             grad.push('#' + h + h + h);
         }
 
-
+        function si(x) {
+            if (x >= 1000) {
+                return x / 1000 + ' k';
+            } else {
+                return x;
+            }
+        }
+        
         function scrollingCanvas(parent, w, h) {
             var component = $('<div>');
             var title = $('<h4>', { text : 'Scrolling canvas' }).appendTo(component);
             var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(component))[0];
             component.appendTo(parent);
             
+            var xsvg;
+            var xsvgg;
+            var xscale;
+            var xaxis;
+            
+            
+            
             canvas.width=w;
             canvas.height=h;
+            
             var ctx = canvas.getContext("2d");
 
             var tempCanvas = document.createElement("canvas");
@@ -58,6 +81,42 @@
             var ret = {
                 w : w,
                 h : h,
+                
+                xaxis : function(domain, range) {
+                    if (!xsvg) {
+                        xsvg = d3.select(component[0]).append('svg').attr('width', w + 20).attr('height', 20).classed('noaxispath', true);
+                        xscale = d3.scaleLinear();
+                        xaxis = d3.axisBottom().scale(xscale).tickFormat(si);
+                        xsvgg = xsvg.append('g');
+                    }
+                    var rangeToUse = range ? [10 + range[0], 10 + range[1]] : [10, w + 10];
+                    xscale.domain(domain).range(rangeToUse);
+                    xsvgg.transition().call(xaxis); // See https://gist.github.com/phoebebright/3098488
+                    return ret;
+                },
+                
+                xaxisFromFfftParams : function(samplerate, freqbincount, clip) {
+                    if (freqbincount <= w) {
+                        // every bin fits to 1 px
+                        return ret.xaxis([0, samplerate / 2], [0, Math.min(freqbincount, w)]);
+                    } else if (clip) {
+                        // not all bin fits, but all are 1 px
+                        return ret.xaxis([0, w * samplerate / (2 * freqbincount), samplerate / 2], [0, w]);
+                    } else {
+                        // every bin goes but merged
+                        var n = 1;
+                        while (freqbincount > w * n) {
+                            n *= 2;
+                        }
+                        // n bins are merged
+                        return ret.xaxis([0, samplerate / 2], [0, freqbincount / n]);
+                        
+                    }
+                },
+                
+                xaxisFromFps : function(fps) {
+                    return ret.xaxis([-w / fps, 0]);
+                },
                 getContext2d : function() {
                     return ctx;
                 },
@@ -235,6 +294,7 @@
         
         $(function() {
             
+            
         
             var meter = new FPSMeter(document.body, { left: 'auto', top : 'auto', right : '5px', bottom : '5px' });
             
@@ -298,10 +358,10 @@
             
             console.log(audioContext.sampleRate);
 
-            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum');
+            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60);
             var sss = scrollingCanvas(window.document.body, 1024, 80).title('Spectrum');
             var pss = scrollingCanvas(window.document.body, 1024, 80).title('Power spectrum');
-            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)');
+            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)').xaxisFromFps(60);
             
             
             var ma = 0.0; // Total energy max
@@ -313,15 +373,29 @@
                 clip_high : true,
                 vu_decay_r : 997,
                 vu_sustain_t : 3000,
-                vu_bin_exponent : 2
+                vu_bin_exponent : 2,
                 
+                
+                updateFftParams : function() {
+                    setFftSize(p.fftsize);
+                    p.updateSamplingParams();
+                },
+                
+                updateSamplingParams : function() {
+                    console.log('Sampling params: samplerate:', audioContext.sampleRate, 'freq bins:', analyser.frequencyBinCount, 'clip:', p.clip_high);
+                    sss.xaxisFromFfftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
+                    pss.xaxisFromFfftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
+                
+                }              
             }
+            p.updateSamplingParams();
+            
             var gui = new dat.GUI();
             
-            gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(setFftSize);
+            gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(p.updateFftParams);
             
             var spf = gui.addFolder('Spectrum display');
-            spf.add(p, 'clip_high');
+            spf.add(p, 'clip_high').onChange(p.updateSamplingParams);
             spf.open();
             
             var vuf = gui.addFolder('VU Meter');
@@ -441,6 +515,8 @@
       </script>
   
     <div style='display: flex;'>
+    
+        <div id='svgh'></div>
         <div style='background-color: black; padding: 10px; display: flex;'>
             <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
             <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
