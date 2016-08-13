@@ -17,7 +17,7 @@
     </style>
   </head>
   <body>
-      
+
       <script src='lib/jquery-3.1.0/jquery-3.1.0.min.js'></script>
       <script src='lib/fpsmeter-0.3.1/fpsmeter.js'></script>
       <script src='lib/audiodrop/AudioDrop.js'></script>
@@ -26,7 +26,54 @@
       <script src='lib/d3-4.2.1/d3.min.js'></script>
       <script type='text/javascript'>
         'use strict';
-        
+
+
+        /**
+         * Create a display.
+         *
+         * @param parent Parent module
+         * @param size Lights count
+         */
+        function lightsDisplay(parent, size) {
+            var component = $('<div>', { style : 'display: flex; margin-bottom: 20px;' } );
+            var inner =  $('<div>', { style : 'background-color: black; padding: 10px; display: flex;' } ).appendTo(component);
+            component.appendTo(parent);
+
+            var grad = d3.scaleLinear().domain([0.0, 1.0]).range(['#602020', '#FFFBE8']).clamp(true);
+
+            var ret = {
+                size : size,
+                setSize : function(s) {
+                    ret.size = s;
+                    var l = []; for (var i = 0; i < ret.size; i++) { l.push(0.1); }
+                    return ret.set(l)
+                },
+                set : function(l) {
+                    if (l.length !== ret.size) {
+                        throw new Error('Expected size ' + ret.size + ', got ' + l.length);
+                    }
+                    var sel = d3.select(inner[0]).selectAll('div').data(l);
+                    sel.style('background-color', grad);
+                    sel.enter()
+                            .append('div')
+                            .style('background-color', grad)
+                            .style('margin', '10px')
+                            .style('width', '20px')
+                            .style('height', '20px');
+                    sel.exit()
+                            .remove();
+                    return ret;
+                }
+            };
+
+            var l = []; for (var i = 0; i < size; i++) { l.push(0.0); }
+
+            ret.set(l)
+            return ret;
+        }
+
+
+
         function getAudioContext() {
             // From http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
             if (typeof AudioContext !== "undefined") {
@@ -53,21 +100,21 @@
                 return x;
             }
         }
-        
+
         function scrollingCanvas(parent, w, h) {
             var component = $('<div>');
-            
+
             var title = $('<h4>', { text : 'Scrolling canvas' }).appendTo(component);
             var chartdiv = $('<div>', { style : 'position: relative;' }).appendTo(component); // will use absolute positions for scales
             var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(chartdiv))[0];
             component.appendTo(parent);
-            
+
             // X axis when specified
             var xsvg;
             var xsvgg;
             var xscale;
             var xaxis;
-            
+
             // Y axis when specified
             var ysvg;
             var ysvgg;
@@ -77,13 +124,13 @@
             // Vertical canvas based scale when specified
             var cvscale;
             var cvscalectx;
-            
-            
-            
-            
+
+
+
+
             canvas.width=w;
             canvas.height=h;
-            
+
             var ctx = canvas.getContext("2d");
 
             var tempCanvas = document.createElement("canvas");
@@ -91,11 +138,11 @@
             tempCanvas.height=h
 
             var tempCtx = tempCanvas.getContext("2d");
-            
+
             var ret = {
                 w : w,
                 h : h,
-            
+
                 cvscaleCtx : function() {
                     if (!cvscalectx) {
                         cvscale = ($('<canvas>', { width : 50, height : h, style : 'display: block; background-color: white ; position : absolute  ; top : 0px ; left : ' + w + 'px' }).prependTo(chartdiv))[0];
@@ -105,7 +152,7 @@
                     }
                     return cvscalectx;
                 },
-            
+
                 xaxis : function(domain, range) {
                     if (!xsvg) {
                         xsvg = d3.select(chartdiv[0]).append('svg')
@@ -129,7 +176,7 @@
                         ysvg = d3.select(chartdiv[0]).append('svg')
                                 .attr('width', 100)
                                 .attr('height', h + 20)
-                                
+
                                 .style('position', 'absolute')
                                 .style('left', w + 'px')
                                 .style('top', '-10px')
@@ -143,9 +190,9 @@
                     ysvgg.transition().call(yaxis); // See https://gist.github.com/phoebebright/3098488
                     return ret;
                 },
-                
-                
-                
+
+
+
                 axisFromFftParams : function(axis, size, invert, samplerate, freqbincount, clip) {
                     var domain;
                     var range;
@@ -153,7 +200,7 @@
                         // every bin fits to 1 px
                         domain = [0, samplerate / 2];
                         range = [0, Math.min(freqbincount, size)];
-                        
+
                     } else if (clip) {
                         // not all bin fits, but all are 1 px
                         domain = [0, size * samplerate / (2 * freqbincount), samplerate / 2];
@@ -167,17 +214,17 @@
                         // n bins are merged
                         domain = [0, samplerate / 2];
                         range = [0, freqbincount / n];
-                        
+
                     }
                     return axis(domain, invert ? [size -  range[0], size - range[1]] : range);
                 },
                 xaxisFromFftParams : function(samplerate, freqbincount, clip) {
                     return ret.axisFromFftParams(ret.xaxis, w - 1, false, samplerate, freqbincount, clip);
-                },                
+                },
                 yaxisFromFftParams : function(samplerate, freqbincount, clip) {
                     return ret.axisFromFftParams(ret.yaxis, h - 1, true, samplerate, freqbincount, clip);
-                },                
-                
+                },
+
                 xaxisFromFps : function(fps) {
                     return ret.xaxis([-w / fps, 0]);
                 },
@@ -193,10 +240,10 @@
                     ctx.translate(-1, 0);
                     // draw the copied image
                     ctx.drawImage(tempCanvas, 0, 0, w, h, 0, 0, w, h);
- 
+
                     // reset the transformation matrix
-                    ctx.setTransform(1, 0, 0, 1, 0, 0);                
-                    
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
                     return ret;
                 },
                 /**
@@ -204,8 +251,8 @@
                  */
                 cline : function() {
                     ctx.fillStyle = '#000000';
-                    ctx.fillRect(w - 1, 0, 1, h);                
-                    
+                    ctx.fillRect(w - 1, 0, 1, h);
+
                     return ret;
                 },
                 /**
@@ -218,9 +265,9 @@
                     ret.cline();
                     if (p >= 0.0 && p <= 1.0) {
                         ctx.fillStyle = '#008800';
-                        ctx.fillRect(w - 1, h * (1 - p), 1, h * p);                
+                        ctx.fillRect(w - 1, h * (1 - p), 1, h * p);
                     }
-                    
+
                     return ret;
                 },
                 /**
@@ -233,23 +280,23 @@
                     ret.bar(p);
                     if (d >= 0.0 && d <= 1.0) {
                         ctx.fillStyle = '#ffffff';
-                        ctx.fillRect(w - 1, h * (1 - d), 1, 1);                
+                        ctx.fillRect(w - 1, h * (1 - d), 1, 1);
                     }
                     return ret;
                 },
-                
-                
+
+
                 simpleSpectrum : function(frequencyData) {
                     var s = Math.min(frequencyData.length, w);
                     for (var i = 0; i < s; i++) {
                         var y = h - Math.round(h *frequencyData[i] / 255);
                         ctx.fillStyle = '#000000';
-                        ctx.fillRect(i, 0, 1, y -1);                
+                        ctx.fillRect(i, 0, 1, y -1);
                         ctx.fillStyle = '#008800';
-                        ctx.fillRect(i, y, 1, h - y);                
+                        ctx.fillRect(i, y, 1, h - y);
                     }
                 },
-                
+
                 /**
                  * Draw byte frequency data (spectrum) in the rightmost pixel column.
                  *
@@ -261,21 +308,21 @@
                     if (clip || frequencyData.length <= h) {
                         if (h > frequencyData.length) {
                             ctx.fillStyle = '#000000';
-                            ctx.fillRect(w - 1, 0, 1, h - frequencyData.length + 1);                
+                            ctx.fillRect(w - 1, 0, 1, h - frequencyData.length + 1);
                         }
                         // iterate over the elements from the array
                         for (var i = 0; i < frequencyData.length && i < h; i++) {
                             // draw each pixel with the specific color
                             var value = frequencyData[i];
                             ctx.fillStyle = grad[value];
-     
+
                             // draw the line at the right side of the canvas
                             ctx.fillRect(w - 1, h - i, 1, 1);
                         }
                     } else {
                         // collapse some bands
                         var a = 1; // number of samples to collapse
-                        
+
                         while (frequencyData.length > h * a) {
                             a *= 2;
                         }
@@ -287,14 +334,14 @@
                                 value += frequencyData[i * a + j];
                             }
                             value /= a;
-                            
+
                             ctx.fillStyle = grad[Math.floor(value)];
                             ctx.fillRect(w - 1, h - i, 1, 1);
-                            
+
                             i++;
                         }
                     }
-     
+
                     return ret;
                 },
                 /**
@@ -309,8 +356,8 @@
 
         }
 
-        
-        
+
+
         /**
          * Allocate bands to group.
          *
@@ -321,48 +368,48 @@
          * @param a Frequency span ratio of last/first band
          */
         function alloc(samplerate, fftsize, maxfreq, count, a) {
-            
+
             console.log('Samplerate ', samplerate, 'fftsize', fftsize, 'maxfreq', maxfreq, 'a', a);
-            
+
             var exp = Math.pow(a, 1 / (count - 1));
-            
-            
+
+
             var targetbinct = Math.round(fftsize * maxfreq / samplerate);
             console.log('Target bin count:', targetbinct, 'exp', exp);
-            
+
             var sizes = [];
             var totalct =0;
             var b = targetbinct / (1 - Math.pow(exp, count)) * (1 - exp);
             console.log('b', b);
-            
+
             for (var i = 0; i < count; i++) {
                 var gi = Math.round(b * Math.pow(exp, i));
                 sizes.push(gi);
                 totalct += gi;
             }
-            
+
             console.log('After first allocation:', sizes);
-            
+
             while (totalct < targetbinct) {
                 for (var i = sizes.length - 1; i >= 0 && totalct < targetbinct; i--) {
                     totalct ++;
                     sizes[i] ++;
                 }
             }
-            
+
             console.log('After adjustments', sizes);
             return sizes;
-        
+
         }
-        
-        
+
+
         $(function() {
-            
-            
-        
+
+
+
             var meter = new FPSMeter(document.body, { left: 'auto', top : 'auto', right : '5px', bottom : '5px' });
-            
-        
+
+
             // See http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
             // and http://ianreah.com/js/Real-time-frequency-analysis-of-streaming-audio-data/main.js
             //
@@ -371,25 +418,25 @@
 
             // http://caniuse.com/#feat=audio-api
             // http://caniuse.com/#feat=requestanimationframe
-            
-            
+
+
             var audioContext = getAudioContext();
             var analyser = audioContext.createAnalyser();
-            
+
             analyser.smoothingTimeConstant = 0;
-            
+
             var frequencyData;
             var setFftSize = function(fftSize) {
                 analyser.fftSize = fftSize;
                 frequencyData = new Uint8Array(analyser.frequencyBinCount);
             }
             setFftSize(4096)
-            
+
             analyser.connect(audioContext.destination);
-            
-            
+
+
             var buffaudio;
-            
+
             AudioDrop({
                 context : audioContext,
                 elements : window.document.body,
@@ -400,79 +447,86 @@
                         console.log('buffaudio already inited');
                         buffaudio.stop();
                         buffaudio.initNewBuffer(buffer);
-                        
 
-                        
+
+
                     } else {
                         console.log('Init buffaudio');
                         buffaudio = new BuffAudio(audioContext, buffer, analyser);
 
                         // Kick it off...
-                        update();            
+                        update();
                     }
                     buffaudio.play();
                 }
             });
-            
-            
-            
-            
-            
-            
-            
+
+
+
+
+
+
+
             console.log(audioContext.sampleRate);
+
+            var vu = lightsDisplay(window.document.body, 32);
 
             var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60).yaxis([0, 100]);
             var sss = scrollingCanvas(window.document.body, 1024, 80).title('Spectrum');
             var pss = scrollingCanvas(window.document.body, 1024, 80).title('Power spectrum');
             var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)').xaxisFromFps(60);
-            
-            
+
+
             var ma = 0.0; // Total energy max
             var maLastSet = 0; // Last timestamp when total energy max set
-            
-            
+
+
             var p = {
                 fftsize : 4096,
                 clip_high : true,
+                vu_size : 32,
                 vu_decay_r : 997,
                 vu_sustain_t : 3000,
                 vu_bin_exponent : 2,
-                
-                
+
+
                 updateFftParams : function() {
                     setFftSize(p.fftsize);
                     p.updateSamplingParams();
                 },
-                
+
                 updateSamplingParams : function() {
                     console.log('Sampling params: samplerate:', audioContext.sampleRate, 'freq bins:', analyser.frequencyBinCount, 'clip:', p.clip_high);
                     c.yaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
                     sss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
                     pss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
-                
-                }              
+                },
+
+                updateVuSize : function() {
+                    vu.setSize(p.vu_size);
+                }
             }
             p.updateSamplingParams();
-            
+
             var gui = new dat.GUI();
-            
+
             gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(p.updateFftParams);
-            
+
             var spf = gui.addFolder('Spectrum display');
             spf.add(p, 'clip_high').onChange(p.updateSamplingParams);
             spf.open();
-            
+
             var vuf = gui.addFolder('VU Meter');
+            vuf.add(p, 'vu_size').onChange(p.updateVuSize);
             vuf.add(p, 'vu_decay_r');
             vuf.add(p, 'vu_sustain_t');
             vuf.add(p, 'vu_bin_exponent', [1, 2]);
             vuf.open();
-            
-            
-            
-            
-            
+
+
+
+
+
             var os = alloc(audioContext.sampleRate, p.fftsize, 3500, 24, 32);
             var osm = [];
             for (var i = 0; i < os.length; i++) { osm.push(0); }
@@ -481,21 +535,21 @@
             var s = 0;
             for (var i = 0; i < os.length; i++) {
                 x.fillStyle = i % 2 == 0 ? '#d0d0d0' : '#c0c0c0';
-                x.fillRect(0, c.h - s - os[i], 50, os[i]);      
+                x.fillRect(0, c.h - s - os[i], 50, os[i]);
                 s += os[i];
             }
 
 
-            
+
             function update() {
                 requestAnimationFrame(update);
-                
+
                 meter.tick();
-                
+
                 var ctims = Date.now();
-                
+
                 analyser.getByteFrequencyData(frequencyData);
-                
+
                 var d = 0;
                 for (var i = 0; i < frequencyData.length; i++) {
                     var s = frequencyData[i] / 255;
@@ -506,16 +560,16 @@
                     d += ss;
                 }
                 d /= frequencyData.length;
-                
+
                 if (ctims - maLastSet > p.vu_sustain_t) {
                     // wait 3 s before scaling down max
                     ma *= p.vu_decay_r / 1000;
                 }
-                
+
                 if ( d > ma ) { ma = d; maLastSet = ctims; }
-                
+
                 pov.barAndDot(ma <= 0 ? 0 : d/ma, 3 * ma);
-                
+
 
                 var sums = [];
                 sums.push(frequencyData[0]);
@@ -527,11 +581,11 @@
                     sums.push(n * 255);
                 }
 
-                
-                
+
+
                 var org = [];
                 var k = 0;
-                
+
                 for (var i = 0; i < os.length; i++) {
                     var orgi = 0;
                     for (var j = 0; j < os[i]; j++) {
@@ -548,11 +602,18 @@
                 }
 
 
-                
+                var vudata = [];
+                var pp = vu.size * d / ma;
+                for (var i = 0; i < vu.size; i++) {
+                    var v = pp > 1.0 ? 1.0 : pp;
+                    pp -= v;
+                    vudata.push(v);
+                }
+                vu.set(vudata);
 
-                
-                
-                
+
+
+
                 var bs = $('.bulb');
                 var pp = Math.floor(bs.length * 255 * d/ma);
                 for (var i = 0; i < bs.length; i++) {
@@ -560,39 +621,39 @@
                     var v = pp > 255 ? 255 : pp;
                     pp -= v;
                     */
-                    
+
                     var mv = 0;
                     for (var j = -2; j <= 2; j++) {
                         if (i + j < 0 || i + j >= bs.length) { continue; }
                         if (osm[i+j] > mv) { mv = osm[i + j]; }
                     }
-                    
+
                     // var v = Math.floor(255 * org[i] / osm[i]);
                     var v = Math.floor(255 * org[i] / mv);
                     $(bs[i]).css('background-color', grad[ v ]);
                 }
                 // $('#l1').css('background-color', grad[ Math.floor(d/ma) ]);
                 // $('#l1').css('background-color', grad[ Math.floor(255 * d/ma) ]);
-                
+
                 c.byteFreqData(frequencyData, p.clip_high);
-                
-                 
+
+
                 sss.simpleSpectrum(frequencyData);
                 pss.simpleSpectrum(sums);
-                
-                
-                
-                
+
+
+
+
             }
-            
-            
-          
+
+
+
         });
-        
+
       </script>
-  
+
     <div style='display: flex;'>
-    
+
         <div id='svgh'></div>
         <div style='background-color: black; padding: 10px; display: flex;'>
             <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
@@ -623,7 +684,7 @@
             <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
         </div>
     </div>
-  
+
   </body>
-  
+
 </html>
