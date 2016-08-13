@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <title>Drop a file here</title>
     <style>
+        html {
+            overflow-y:scroll; /* see http://stackoverflow.com/questions/1202425/making-the-main-scrollbar-always-visible */
+        }
         canvas {
             /* margin-left : 10px; */ /* Fit to scale */
             /* margin-bottom: 10px; */
@@ -35,40 +38,71 @@
          * @param size Lights count
          */
         function lightsDisplay(parent, size) {
+
             var component = $('<div>', { style : 'display: flex; margin-bottom: 20px;' } );
             var inner =  $('<div>', { style : 'background-color: black; padding: 10px; display: flex;' } ).appendTo(component);
             component.appendTo(parent);
 
             var grad = d3.scaleLinear().domain([0.0, 1.0]).range(['#602020', '#FFFBE8']).clamp(true);
 
+
+
             var ret = {
                 size : size,
                 setSize : function(s) {
+                    var adding = ret.size < s;
                     ret.size = s;
-                    var l = []; for (var i = 0; i < ret.size; i++) { l.push(0.1); }
-                    return ret.set(l)
+
+                    var a = 32; // square size
+                    var m = 8; // Margin
+
+                    var l = []; for (var i = 0; i < ret.size; i++) { l.push(0.0); }
+
+                    var pw = $(parent).innerWidth();
+
+                    while (300 + s * (a + 2 * m) > pw) {
+                        a --;
+                        m = Math.round(a / 4);
+                    }
+                    var sel = d3.select(inner[0]).selectAll('div');
+                    if (adding) {
+                        // Cells might need to be smaller
+                        sel
+                            .style('margin', m + 'px')
+                            .style('width', a + 'px')
+                            .style('height', a + 'px');
+                    }
+
+                    sel.data(l).enter()
+                            .append('div')
+                            .style('background-color', grad)
+                            .style('margin', m + 'px')
+                            .style('width', a + 'px')
+                            .style('height', a + 'px');
+
+                    sel.data(l).exit()
+                            .remove();
+
+                    if (!adding) {
+                        sel
+                            .style('margin', m + 'px')
+                            .style('width', a + 'px')
+                            .style('height', a + 'px');
+                    }
+
+                    return ret;
                 },
                 set : function(l) {
+
                     if (l.length !== ret.size) {
                         throw new Error('Expected size ' + ret.size + ', got ' + l.length);
                     }
-                    var sel = d3.select(inner[0]).selectAll('div').data(l);
-                    sel.style('background-color', grad);
-                    sel.enter()
-                            .append('div')
-                            .style('background-color', grad)
-                            .style('margin', '10px')
-                            .style('width', '20px')
-                            .style('height', '20px');
-                    sel.exit()
-                            .remove();
+                    d3.select(inner[0]).selectAll('div').data(l).style('background-color', grad);
                     return ret;
                 }
             };
 
-            var l = []; for (var i = 0; i < size; i++) { l.push(0.0); }
-
-            ret.set(l)
+            ret.setSize(size);
             return ret;
         }
 
@@ -526,7 +560,7 @@
             spf.open();
 
             var vuf = gui.addFolder('VU Meter');
-            vuf.add(p, 'vu_size').onChange(p.updateVuSize);
+            vuf.add(p, 'vu_size').min(1).max(256).step(1).onChange(p.updateVuSize);
             vuf.add(p, 'vu_decay_r');
             vuf.add(p, 'vu_sustain_t');
             vuf.add(p, 'vu_bin_exponent', [1, 2]);
