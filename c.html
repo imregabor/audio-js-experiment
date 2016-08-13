@@ -275,12 +275,17 @@
                  *
                  * @param p Bar value normalized to 0..1 range
                  * @param d Dot value normalized to 0..1 range
+                 * @param d2 Dot value normalized to 0..1 range
                  */
-                barAndDot : function(p, d) {
+                barAndDot : function(p, d, d2) {
                     ret.bar(p);
-                    if (d >= 0.0 && d <= 1.0) {
+                    if (d && d >= 0.0 && d <= 1.0) {
                         ctx.fillStyle = '#ffffff';
                         ctx.fillRect(w - 1, h * (1 - d), 1, 1);
+                    }
+                    if (d2 && d2 >= 0.0 && d2 <= 1.0) {
+                        ctx.fillStyle = '#aaaaaa';
+                        ctx.fillRect(w - 1, h * (1 - d2), 1, 1);
                     }
                     return ret;
                 },
@@ -479,6 +484,8 @@
 
             var ma = 0.0; // Total energy max
             var maLastSet = 0; // Last timestamp when total energy max set
+            var mi = 0.0; // Total energy min
+            var miLastSet = 0; // Last timestamp when total energy min was set
 
 
             var p = {
@@ -565,10 +572,15 @@
                     // wait 3 s before scaling down max
                     ma *= p.vu_decay_r / 1000;
                 }
+                if (ctims - miLastSet > p.vu_sustain_t) {
+                    // wait 3 s before scaling up min
+                    mi = 1 - ( 1 - mi) * p.vu_decay_r / 1000;
+                }
 
                 if ( d > ma ) { ma = d; maLastSet = ctims; }
+                if ( d < mi ) { mi = d; miLastSet = ctims; }
 
-                pov.barAndDot(ma <= 0 ? 0 : d/ma, 3 * ma);
+                pov.barAndDot(ma <= 0 ? 0 : (d - mi)/(ma - mi), 3 * ma, 3 * mi);
 
 
                 var sums = [];
@@ -603,7 +615,7 @@
 
 
                 var vudata = [];
-                var pp = vu.size * d / ma;
+                var pp = vu.size * (d - mi) / (ma - mi);
                 for (var i = 0; i < vu.size; i++) {
                     var v = pp > 1.0 ? 1.0 : pp;
                     pp -= v;
