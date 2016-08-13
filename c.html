@@ -5,7 +5,7 @@
     <title>Drop a file here</title>
     <style>
         canvas {
-            margin-left : 10px;  /* Fit to scale */
+            /* margin-left : 10px; */ /* Fit to scale */
             /* margin-bottom: 10px; */
         }
         svg {
@@ -56,16 +56,24 @@
         
         function scrollingCanvas(parent, w, h) {
             var component = $('<div>');
+            
             var title = $('<h4>', { text : 'Scrolling canvas' }).appendTo(component);
-            var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(component))[0];
+            var chartdiv = $('<div>', { style : 'position: relative;' }).appendTo(component); // will use absolute positions for scales
+            var canvas = ($('<canvas>', { width : w, height : h, style : 'display: block; background-color: black ;' }).appendTo(chartdiv))[0];
             component.appendTo(parent);
             
+            // X axis when specified
             var xsvg;
             var xsvgg;
             var xscale;
             var xaxis;
             
-            
+            // Y axis when specified
+            var ysvg;
+            var ysvgg;
+            var yscale;
+            var yaxis;
+
             
             canvas.width=w;
             canvas.height=h;
@@ -84,7 +92,13 @@
                 
                 xaxis : function(domain, range) {
                     if (!xsvg) {
-                        xsvg = d3.select(component[0]).append('svg').attr('width', w + 20).attr('height', 20).classed('noaxispath', true);
+                        xsvg = d3.select(chartdiv[0]).append('svg')
+                                    .attr('width', w + 20)
+                                    .attr('height', 20)
+                                    .style('position', 'absolute')
+                                    .style('left', '-10px')
+                                    .style('top', h + 'px')
+                                    .classed('noaxispath', true);
                         xscale = d3.scaleLinear();
                         xaxis = d3.axisBottom().scale(xscale).tickFormat(si);
                         xsvgg = xsvg.append('g');
@@ -94,25 +108,59 @@
                     xsvgg.transition().call(xaxis); // See https://gist.github.com/phoebebright/3098488
                     return ret;
                 },
+                yaxis : function(domain, range) {
+                    if (!ysvg) {
+                        ysvg = d3.select(chartdiv[0]).append('svg')
+                                .attr('width', 100)
+                                .attr('height', h + 20)
+                                
+                                .style('position', 'absolute')
+                                .style('left', w + 'px')
+                                .style('top', '-10px')
+                                .classed('noaxispath', true);
+                        yscale = d3.scaleLinear();
+                        yaxis = d3.axisRight().scale(yscale).tickFormat(si);
+                        ysvgg = ysvg.append('g');
+                    }
+                    var rangeToUse = range ? [10 + range[0], 10 + range[1]] : [10, h + 10];
+                    yscale.domain(domain).range(rangeToUse);
+                    ysvgg.transition().call(yaxis); // See https://gist.github.com/phoebebright/3098488
+                    return ret;
+                },
                 
-                xaxisFromFfftParams : function(samplerate, freqbincount, clip) {
-                    if (freqbincount <= w) {
+                
+                
+                axisFromFftParams : function(axis, size, invert, samplerate, freqbincount, clip) {
+                    var domain;
+                    var range;
+                    if (freqbincount <= size) {
                         // every bin fits to 1 px
-                        return ret.xaxis([0, samplerate / 2], [0, Math.min(freqbincount, w)]);
+                        domain = [0, samplerate / 2];
+                        range = [0, Math.min(freqbincount, size)];
+                        
                     } else if (clip) {
                         // not all bin fits, but all are 1 px
-                        return ret.xaxis([0, w * samplerate / (2 * freqbincount), samplerate / 2], [0, w]);
+                        domain = [0, size * samplerate / (2 * freqbincount), samplerate / 2];
+                        range = [0, size];
                     } else {
                         // every bin goes but merged
                         var n = 1;
-                        while (freqbincount > w * n) {
+                        while (freqbincount > size * n) {
                             n *= 2;
                         }
                         // n bins are merged
-                        return ret.xaxis([0, samplerate / 2], [0, freqbincount / n]);
+                        domain = [0, samplerate / 2];
+                        range = [0, freqbincount / n];
                         
                     }
+                    return axis(invert?[domain[1], domain[0]]:domain, range);
                 },
+                xaxisFromFftParams : function(samplerate, freqbincount, clip) {
+                    return ret.axisFromFftParams(ret.xaxis, w, false, samplerate, freqbincount, clip);
+                },                
+                yaxisFromFftParams : function(samplerate, freqbincount, clip) {
+                    return ret.axisFromFftParams(ret.yaxis, h, true, samplerate, freqbincount, clip);
+                },                
                 
                 xaxisFromFps : function(fps) {
                     return ret.xaxis([-w / fps, 0]);
@@ -358,7 +406,7 @@
             
             console.log(audioContext.sampleRate);
 
-            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60);
+            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60).yaxis([0, 100]);
             var sss = scrollingCanvas(window.document.body, 1024, 80).title('Spectrum');
             var pss = scrollingCanvas(window.document.body, 1024, 80).title('Power spectrum');
             var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)').xaxisFromFps(60);
@@ -383,8 +431,9 @@
                 
                 updateSamplingParams : function() {
                     console.log('Sampling params: samplerate:', audioContext.sampleRate, 'freq bins:', analyser.frequencyBinCount, 'clip:', p.clip_high);
-                    sss.xaxisFromFfftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
-                    pss.xaxisFromFfftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
+                    c.yaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
+                    sss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
+                    pss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
                 
                 }              
             }
