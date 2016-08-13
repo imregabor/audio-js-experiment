@@ -489,6 +489,7 @@
 
 
             var p = {
+                draw_spectrum : true,
                 fftsize : 4096,
                 clip_high : true,
                 vu_size : 32,
@@ -520,6 +521,7 @@
             gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(p.updateFftParams);
 
             var spf = gui.addFolder('Spectrum display');
+            spf.add(p, 'draw_spectrum');
             spf.add(p, 'clip_high').onChange(p.updateSamplingParams);
             spf.open();
 
@@ -647,11 +649,12 @@
                 // $('#l1').css('background-color', grad[ Math.floor(d/ma) ]);
                 // $('#l1').css('background-color', grad[ Math.floor(255 * d/ma) ]);
 
-                c.byteFreqData(frequencyData, p.clip_high);
 
-
-                sss.simpleSpectrum(frequencyData);
-                pss.simpleSpectrum(sums);
+                if (p.draw_spectrum) {
+                    c.byteFreqData(frequencyData, p.clip_high);
+                    sss.simpleSpectrum(frequencyData);
+                    pss.simpleSpectrum(sums);
+                }
 
 
 
