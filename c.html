@@ -153,13 +153,13 @@
                         range = [0, freqbincount / n];
                         
                     }
-                    return axis(invert?[domain[1], domain[0]]:domain, range);
+                    return axis(domain, invert ? [size -  range[0], size - range[1]] : range);
                 },
                 xaxisFromFftParams : function(samplerate, freqbincount, clip) {
-                    return ret.axisFromFftParams(ret.xaxis, w, false, samplerate, freqbincount, clip);
+                    return ret.axisFromFftParams(ret.xaxis, w - 1, false, samplerate, freqbincount, clip);
                 },                
                 yaxisFromFftParams : function(samplerate, freqbincount, clip) {
-                    return ret.axisFromFftParams(ret.yaxis, h, true, samplerate, freqbincount, clip);
+                    return ret.axisFromFftParams(ret.yaxis, h - 1, true, samplerate, freqbincount, clip);
                 },                
                 
                 xaxisFromFps : function(fps) {
