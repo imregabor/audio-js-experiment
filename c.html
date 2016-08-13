@@ -74,6 +74,12 @@
             var yscale;
             var yaxis;
 
+            // Vertical canvas based scale when specified
+            var cvscale;
+            var cvscalectx;
+            
+            
+            
             
             canvas.width=w;
             canvas.height=h;
@@ -89,7 +95,17 @@
             var ret = {
                 w : w,
                 h : h,
-                
+            
+                cvscaleCtx : function() {
+                    if (!cvscalectx) {
+                        cvscale = ($('<canvas>', { width : 50, height : h, style : 'display: block; background-color: white ; position : absolute  ; top : 0px ; left : ' + w + 'px' }).prependTo(chartdiv))[0];
+                        cvscale.width=50;
+                        cvscale.height=h;
+                        cvscalectx = cvscale.getContext("2d");
+                    }
+                    return cvscalectx;
+                },
+            
                 xaxis : function(domain, range) {
                     if (!xsvg) {
                         xsvg = d3.select(chartdiv[0]).append('svg')
@@ -455,9 +471,21 @@
             
             
             
+            
+            
             var os = alloc(audioContext.sampleRate, p.fftsize, 3500, 24, 32);
             var osm = [];
             for (var i = 0; i < os.length; i++) { osm.push(0); }
+
+            var x = c.cvscaleCtx();
+            var s = 0;
+            for (var i = 0; i < os.length; i++) {
+                x.fillStyle = i % 2 == 0 ? '#d0d0d0' : '#c0c0c0';
+                x.fillRect(0, c.h - s - os[i], 50, os[i]);      
+                s += os[i];
+            }
+
+
             
             function update() {
                 requestAnimationFrame(update);
