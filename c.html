@@ -171,11 +171,11 @@
             var gui = new dat.GUI();
 
 
-            var vu2 = vumeter(window.document.body, gui, "New VUMeter");
+            var vu2 = vumeter($('#cont'), gui, "New VUMeter");
 
-            var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60).yaxis([0, 100]);
-            var sss = scrollingCanvas(window.document.body, 1024, 80).title('Spectrum');
-            var pss = scrollingCanvas(window.document.body, 1024, 80).title('Power spectrum');
+            var c = scrollingCanvas($('#cont'), 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60).yaxis([0, 100]);
+            var sss = scrollingCanvas($('#cont'), 1024, 80).title('Spectrum');
+            var pss = scrollingCanvas($('#cont'), 1024, 80).title('Power spectrum');
 
 
             var p = {
@@ -329,7 +329,7 @@
             <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
         </div>
     </div>
-
+      <div id='cont'></div>
   </body>
 
 </html>
