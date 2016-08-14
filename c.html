@@ -29,6 +29,7 @@
       <script src='lib/dat.gui-0.5.1/dat.gui.min.js' type='text/javascript'></script>
       <script src='lib/d3-4.2.1/d3.min.js' type='text/javascript'></script>
       <script src='lib/ui.js' type='text/javascript'></script>
+      <script src='lib/vumeter.js' type='text/javascript'></script>
       <script type='text/javascript'>
         "use strict";
 
@@ -167,37 +168,20 @@
             });
 
 
+            var gui = new dat.GUI();
 
 
-
-
-
-            console.log(audioContext.sampleRate);
-
-            var vu = lightsDisplay(window.document.body, 32);
+            var vu2 = vumeter(window.document.body, gui, "New VUMeter");
 
             var c = scrollingCanvas(window.document.body, 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60).yaxis([0, 100]);
             var sss = scrollingCanvas(window.document.body, 1024, 80).title('Spectrum');
             var pss = scrollingCanvas(window.document.body, 1024, 80).title('Power spectrum');
-            var pov = scrollingCanvas(window.document.body, 800, 80).title('Scaled total energy and relaxed max energy (x3)').xaxisFromFps(60);
-
-
-            var ma = 0.0; // Total energy max
-            var maLastSet = 0; // Last timestamp when total energy max set
-            var mi = 0.0; // Total energy min
-            var miLastSet = 0; // Last timestamp when total energy min was set
 
 
             var p = {
                 draw_spectrum : true,
                 fftsize : 4096,
                 clip_high : true,
-                vu_size : 32,
-                vu_br_range : 1.0,
-                vu_scale_min : true,
-                vu_decay_r : 997,
-                vu_sustain_t : 3000,
-                vu_bin_exponent : 2,
 
 
                 updateFftParams : function() {
@@ -210,15 +194,10 @@
                     c.yaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
                     sss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
                     pss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
-                },
-
-                updateVuSize : function() {
-                    vu.setSize(p.vu_size);
                 }
             }
             p.updateSamplingParams();
 
-            var gui = new dat.GUI();
 
             gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(p.updateFftParams);
 
@@ -226,16 +205,6 @@
             spf.add(p, 'draw_spectrum');
             spf.add(p, 'clip_high').onChange(p.updateSamplingParams);
             spf.open();
-
-            var vuf = gui.addFolder('VU Meter');
-            vuf.add(p, 'vu_size').min(1).max(256).step(1).onChange(p.updateVuSize);
-            vuf.add(p, 'vu_br_range').min(0).max(1);
-            vuf.add(p, 'vu_scale_min');
-            vuf.add(p, 'vu_decay_r');
-            vuf.add(p, 'vu_sustain_t');
-            vuf.add(p, 'vu_bin_exponent', [1, 2]);
-            vuf.open();
-
 
 
 
@@ -263,37 +232,7 @@
 
                 analyser.getByteFrequencyData(frequencyData);
 
-                var d = 0;
-                for (var i = 0; i < frequencyData.length; i++) {
-                    var s = frequencyData[i] / 255;
-                    var ss = s;
-                    for (var j = 1; j < p.vu_bin_exponent; j++) {
-                        ss *= s;
-                    }
-                    d += ss;
-                }
-                d /= frequencyData.length;
-
-                if (ctims - maLastSet > p.vu_sustain_t) {
-                    // wait 3 s before scaling down max
-                    ma *= p.vu_decay_r / 1000;
-                }
-                if (ctims - miLastSet > p.vu_sustain_t) {
-                    // wait 3 s before scaling up min
-                    mi = 1 - ( 1 - mi) * p.vu_decay_r / 1000;
-                }
-
-                if ( d > ma ) { ma = d; maLastSet = ctims; }
-                if ( d < mi ) { mi = d; miLastSet = ctims; }
-
-                var vuv;
-                if (p.vu_scale_min) {
-                    vuv = ma <= mi ? 0 : (d - mi)/(ma - mi);
-                } else {
-                    vuv = ma <= 0 ? 0 : d /ma;
-                }
-
-                pov.barAndDot(vuv, 3 * ma, 3 * mi);
+                vu2.byteFrequencyData(frequencyData);
 
 
                 var sums = [];
@@ -327,26 +266,8 @@
                 }
 
 
-                var vudata = [];
-
-                var pp = vu.size * vuv;
-                for (var i = 0; i < vu.size; i++) {
-                    var v = pp > 1.0 ? 1.0 : pp;
-                    pp -= v;
-                    vudata.push(v * (p.vu_br_range * vuv + 1 - p.vu_br_range));
-                }
-                vu.set(vudata);
-
-
-
-
                 var bs = $('.bulb');
-                var pp = Math.floor(bs.length * 255 * d/ma);
                 for (var i = 0; i < bs.length; i++) {
-                    /*
-                    var v = pp > 255 ? 255 : pp;
-                    pp -= v;
-                    */
 
                     var mv = 0;
                     for (var j = -2; j <= 2; j++) {
@@ -358,9 +279,6 @@
                     var v = Math.floor(255 * org[i] / mv);
                     $(bs[i]).css('background-color', grad[ v ]);
                 }
-                // $('#l1').css('background-color', grad[ Math.floor(d/ma) ]);
-                // $('#l1').css('background-color', grad[ Math.floor(255 * d/ma) ]);
-
 
                 if (p.draw_spectrum) {
                     c.byteFreqData(frequencyData, p.clip_high);
