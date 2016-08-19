@@ -30,89 +30,12 @@
       <script src='lib/d3-4.2.1/d3.min.js' type='text/javascript'></script>
       <script src='lib/ui.js' type='text/javascript'></script>
       <script src='lib/vumeter.js' type='text/javascript'></script>
+      <script src='lib/organ.js' type='text/javascript'></script>
+      <script src='lib/signalproc.js' type='text/javascript'></script>
       <script type='text/javascript'>
         "use strict";
 
-
-
-        function getAudioContext() {
-            // From http://ianreah.com/2013/02/28/Real-time-analysis-of-streaming-audio-data-with-Web-Audio-API.html
-            if (typeof AudioContext !== "undefined") {
-                return new AudioContext();
-            } else if (typeof webkitAudioContext !== "undefined") {
-                return new webkitAudioContext();
-            } else {
-                throw new Error('No AudioContext available');
-            }
-        }
-        var grad = [];
-        for (var i = 0; i < 256; i++) {
-            var h = Number(i).toString(16);
-            while (h.length < 2) {
-                h = '0' + h;
-            }
-            grad.push('#' + h + h + h);
-        }
-
-        function si(x) {
-            if (x >= 1000) {
-                return x / 1000 + ' k';
-            } else {
-                return x;
-            }
-        }
-
-
-
-        /**
-         * Allocate bands to group.
-         *
-         * @param samplerate Audio sample rate
-         * @param fftsize FFT size parameter, freq data is expected to be half
-         * @param max frequency to represent
-         * @param count number of final groups
-         * @param a Frequency span ratio of last/first band
-         */
-        function alloc(samplerate, fftsize, maxfreq, count, a) {
-
-            console.log('Samplerate ', samplerate, 'fftsize', fftsize, 'maxfreq', maxfreq, 'a', a);
-
-            var exp = Math.pow(a, 1 / (count - 1));
-
-
-            var targetbinct = Math.round(fftsize * maxfreq / samplerate);
-            console.log('Target bin count:', targetbinct, 'exp', exp);
-
-            var sizes = [];
-            var totalct =0;
-            var b = targetbinct / (1 - Math.pow(exp, count)) * (1 - exp);
-            console.log('b', b);
-
-            for (var i = 0; i < count; i++) {
-                var gi = Math.round(b * Math.pow(exp, i));
-                sizes.push(gi);
-                totalct += gi;
-            }
-
-            console.log('After first allocation:', sizes);
-
-            while (totalct < targetbinct) {
-                for (var i = sizes.length - 1; i >= 0 && totalct < targetbinct; i--) {
-                    totalct ++;
-                    sizes[i] ++;
-                }
-            }
-
-            console.log('After adjustments', sizes);
-            return sizes;
-
-        }
-
-
         $(function() {
-
-
-
             var meter = new FPSMeter(document.body, { left: 'auto', top : 'auto', right : '5px', bottom : '5px' });
 
 
@@ -126,25 +49,13 @@
             // http://caniuse.com/#feat=requestanimationframe
 
 
-            var audioContext = getAudioContext();
-            var analyser = audioContext.createAnalyser();
-
-            analyser.smoothingTimeConstant = 0;
-
-            var frequencyData;
-            var setFftSize = function(fftSize) {
-                analyser.fftSize = fftSize;
-                frequencyData = new Uint8Array(analyser.frequencyBinCount);
-            }
-            setFftSize(4096)
-
-            analyser.connect(audioContext.destination);
-
+            var gui = new dat.GUI();
+            var sps = spectrumSource($('#cont'), gui);
 
             var buffaudio;
 
             AudioDrop({
-                context : audioContext,
+                context : sps.getAudioContext(),
                 elements : window.document.body,
                 drop : function(buffer, file) {
                     console.log('New file dropped');
@@ -153,12 +64,9 @@
                         console.log('buffaudio already inited');
                         buffaudio.stop();
                         buffaudio.initNewBuffer(buffer);
-
-
-
                     } else {
                         console.log('Init buffaudio');
-                        buffaudio = new BuffAudio(audioContext, buffer, analyser);
+                        buffaudio = new BuffAudio(sps.getAudioContext(), buffer, sps.getAnalyser());
 
                         // Kick it off...
                         update();
@@ -168,167 +76,27 @@
             });
 
 
-            var gui = new dat.GUI();
 
 
             var vu2 = vumeter($('#cont'), gui, "New VUMeter");
-
-            var c = scrollingCanvas($('#cont'), 800, 512).title('Bottom part of main spectrum').xaxisFromFps(60).yaxis([0, 100]);
-            var sss = scrollingCanvas($('#cont'), 1024, 80).title('Spectrum');
-            var pss = scrollingCanvas($('#cont'), 1024, 80).title('Power spectrum');
+            var or2 = organ($('#cont'), gui, "New Organ");
 
 
-            var p = {
-                draw_spectrum : true,
-                fftsize : 4096,
-                clip_high : true,
+            sps.addClient(vu2);
+            sps.addClient(or2);
 
-
-                updateFftParams : function() {
-                    setFftSize(p.fftsize);
-                    p.updateSamplingParams();
-                },
-
-                updateSamplingParams : function() {
-                    console.log('Sampling params: samplerate:', audioContext.sampleRate, 'freq bins:', analyser.frequencyBinCount, 'clip:', p.clip_high);
-                    c.yaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
-                    sss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
-                    pss.xaxisFromFftParams(audioContext.sampleRate, analyser.frequencyBinCount, p.clip_high);
-                }
-            }
-            p.updateSamplingParams();
-
-
-            gui.add(p, 'fftsize', [ 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]).onChange(p.updateFftParams);
-
-            var spf = gui.addFolder('Spectrum display');
-            spf.add(p, 'draw_spectrum');
-            spf.add(p, 'clip_high').onChange(p.updateSamplingParams);
-            spf.open();
-
-
-
-
-            var os = alloc(audioContext.sampleRate, p.fftsize, 3500, 24, 32);
-            var osm = [];
-            for (var i = 0; i < os.length; i++) { osm.push(0); }
-
-            var x = c.cvscaleCtx();
-            var s = 0;
-            for (var i = 0; i < os.length; i++) {
-                x.fillStyle = i % 2 == 0 ? '#d0d0d0' : '#c0c0c0';
-                x.fillRect(0, c.h - s - os[i], 50, os[i]);
-                s += os[i];
-            }
-
-
+            or2.notifybinsizes(sps.vscaleBins);
 
             function update() {
                 requestAnimationFrame(update);
-
                 meter.tick();
-
-                var ctims = Date.now();
-
-                analyser.getByteFrequencyData(frequencyData);
-
-                vu2.byteFrequencyData(frequencyData);
-
-
-                var sums = [];
-                sums.push(frequencyData[0]);
-                for(var i = 1; i < frequencyData.length; i++) {
-                    var n = frequencyData[i] / 255;
-                    for (var j = 2; j < 4 && i * j < frequencyData.length; j++) {
-                        n *= frequencyData[i * j] / 255;
-                    }
-                    sums.push(n * 255);
-                }
-
-
-
-                var org = [];
-                var k = 0;
-
-                for (var i = 0; i < os.length; i++) {
-                    var orgi = 0;
-                    for (var j = 0; j < os[i]; j++) {
-                        orgi += frequencyData[k] * frequencyData[k];
-                        // orgi += sums[k] * sums[k];
-                        k++;
-                    }
-                    orgi /= (255 * os[i]);
-                    org.push(orgi);
-                    osm[i] *= 0.997;
-                    if (osm[i] < orgi) {
-                       osm[i] = orgi;
-                    }
-                }
-
-
-                var bs = $('.bulb');
-                for (var i = 0; i < bs.length; i++) {
-
-                    var mv = 0;
-                    for (var j = -2; j <= 2; j++) {
-                        if (i + j < 0 || i + j >= bs.length) { continue; }
-                        if (osm[i+j] > mv) { mv = osm[i + j]; }
-                    }
-
-                    // var v = Math.floor(255 * org[i] / osm[i]);
-                    var v = Math.floor(255 * org[i] / mv);
-                    $(bs[i]).css('background-color', grad[ v ]);
-                }
-
-                if (p.draw_spectrum) {
-                    c.byteFreqData(frequencyData, p.clip_high);
-                    sss.simpleSpectrum(frequencyData);
-                    pss.simpleSpectrum(sums);
-                }
-
-
-
-
+                sps.ping();
             }
-
-
-
         });
 
       </script>
 
-    <div style='display: flex;'>
 
-        <div id='svgh'></div>
-        <div style='background-color: black; padding: 10px; display: flex;'>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-            <div class='bulb' style='margin: 10px; width: 20px; height: 20px; background-color: #602020;'></div>
-        </div>
-    </div>
       <div id='cont'></div>
   </body>
 
