@@ -32,6 +32,7 @@
       <script src='lib/vumeter.js' type='text/javascript'></script>
       <script src='lib/organ.js' type='text/javascript'></script>
       <script src='lib/signalproc.js' type='text/javascript'></script>
+      <script src='lib/transformSpectrum.js' type='text/javascript'></script>
       <script type='text/javascript'>
         "use strict";
 
@@ -77,20 +78,23 @@
 
 
 
+            var ts = transformSpectrum($('#cont'), gui);
+            var vu2 = vumeter($('#cont'), gui, "VUMeter");
+            // var or2 = organ($('#cont'), gui, "Organ");
+            var or3 = organ($('#cont'), gui, "Organ - on processed");
 
-            var vu2 = vumeter($('#cont'), gui, "New VUMeter");
-            var or2 = organ($('#cont'), gui, "New Organ");
-
-
+            sps.addClient(ts);
             sps.addClient(vu2);
-            sps.addClient(or2);
+            // sps.addClient(or2);
+            sps.addClient(or3, ts);
 
-            or2.notifybinsizes(sps.vscaleBins);
+            or3.notifybinsizes(sps.vscaleBins);
 
             function update() {
                 requestAnimationFrame(update);
                 meter.tick();
                 sps.ping();
+
             }
         });
 
