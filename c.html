@@ -51,6 +51,22 @@
 
 
             var gui = new dat.GUI();
+
+
+            var o2d = lightDisplay2d($('#cont'), 32, 6);
+            var o2ds = {
+                w : 32,
+                h : 6,
+                upd: function() {
+                    o2d.setSize(o2ds.w, o2ds.h);
+                }
+            }
+            gui.add(o2ds, 'w').min(1).max(128).step(1).onChange(o2ds.upd);
+            gui.add(o2ds, 'h').min(1).max(128).step(1).onChange(o2ds.upd);
+            var oa = o2d.newEmptyData();
+            oa[2][0] = 1;
+            o2d.set(oa);
+
             var sps = spectrumSource($('#cont'), gui);
 
             var buffaudio;
